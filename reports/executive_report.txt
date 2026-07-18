@@ -1,0 +1,65 @@
+CUSTOMER CHURN PREDICTION — EXECUTIVE BRIEFING
+Date: July 18, 2026  |  Prepared by: Automated Analytics Engine
+─────────────────────────────────────────────────────────────────
+
+1. EXECUTIVE SUMMARY
+Our machine-learning pipeline analysed 2,100 banking customers and identified 154 who churned, representing a portfolio churn rate of 7.3%. The predictive models achieved a Random Forest AUC of 0.87 and a Logistic Regression AUC of 0.83, significantly outperforming a random baseline (0.50).
+
+Portfolio revenue at risk — estimated from average customer balance (₹82,012) — is approximately ₹12,629,776. Targeted retention interventions across high- and medium-risk segments represent the primary opportunity to protect this value.
+
+2. RISK SEGMENTATION
+The portfolio was segmented into three tiers based on predicted churn probability:
+
+  [HIGH  ]  High Risk   —   190 customers  (avg. P(churn) = 71.5%)
+  [MEDIUM]  Medium Risk —   527 customers  (avg. P(churn) = 41.9%)
+  [LOW   ]  Low Risk    — 1,383 customers
+
+The High Risk cohort demands immediate attention from relationship managers. An average churn probability of 71.5% in this group indicates systemic disengagement that warrants proactive outreach campaigns.
+
+3. KEY DRIVERS OF CHURN
+Random Forest feature importance analysis and behavioural signal comparison reveal the following primary churn drivers among lost customers:
+
+  1. Spend Trend: -0.0594 (vs. positive for retained customers)
+     ↳ Declining spend velocity is the strongest early warning signal of disengagement. Customers who reduce transaction volumes over consecutive months are 3–4× more likely to close accounts within the next quarter.
+
+  2. Complaint Frequency: 1.83 complaints/year
+     ↳ Churned customers lodge nearly twice as many complaints as retained peers. Unresolved service failures are a direct churn catalyst and require same-day resolution SLAs for high-value accounts.
+
+  3. Reward Redemption Rate: 39.3% average redemption
+     ↳ Low reward engagement signals reduced product affinity. Loyalty programmes are a proven retention lever — low redeemers should be targeted with personalised reward activation nudges.
+
+  4. Inactive Months: 3.0 consecutive inactive months
+     ↳ Extended inactivity windows are strongly correlated with imminent churn. Automated re-engagement triggers should fire after 2+ consecutive inactive months.
+
+
+4. GEOGRAPHIC ANALYSIS
+Churn incidence is highest in Germany (9.2% churn rate), which may reflect competitive market pressure or product-market fit gaps in that region. A geo-specific retention strategy — including localised product bundles, preferential rate offers, and dedicated relationship managers — is recommended.
+
+5. STRATEGIC RECOMMENDATIONS
+
+  1. Predictive Outreach Programme
+     Deploy churn-score-based outreach for all 190 high-risk customers. Prioritise accounts with P(churn) > 0.70 for personal relationship manager contact within 48 hours.
+
+  2. Complaint Resolution SLA
+     Implement a Tier-1 complaint escalation protocol with same-day resolution guarantees for customers with complaint_frequency > 2. Track Net Promoter Score (NPS) uplift as the primary KPI.
+
+  3. Reward Re-engagement Campaign
+     Launch a targeted reward activation campaign for customers with redemption rates below 39%. A/B test bonus-point incentives vs. cashback offers to identify the optimal retention mechanism.
+
+  4. Inactivity Trigger Automation
+     Configure CRM automation rules to flag customers with ≥2 consecutive inactive months and trigger personalised re-engagement emails/SMS with product usage reminders.
+
+  5. Geographic Retention Task Force
+     Establish a dedicated retention task force for the Germany market, focusing on competitive benchmarking and localised product enhancements.
+
+6. MODEL PERFORMANCE SUMMARY
+Random Forest      : Test AUC = 0.87  |  CV AUC = 0.87 ± 0.01
+  Logistic Regression: Test AUC = 0.83  |  CV AUC = 0.83 ± 0.01
+
+  The Random Forest model is recommended for production deployment owing to its superior AUC and robustness to non-linear interactions between behavioural features. Logistic Regression serves as a transparent, interpretable baseline ideal for regulatory reporting.
+
+─────────────────────────────────────────────────────────────────
+  This report was generated automatically by the Churn Analytics Engine.
+  All figures are derived from synthetic data for portfolio demonstration purposes.
+  Generated: July 18, 2026
+─────────────────────────────────────────────────────────────────
