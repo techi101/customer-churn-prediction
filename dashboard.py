@@ -8,7 +8,7 @@ Features:
   ─ Retention campaign economics  (capture, lift, profit-optimal threshold)
   ─ Risk segments vs actual churn  (bar + pie charts)
   ─ Churn drivers: age, products held, activity, feature importance
-  ─ Individual customer look-up with churn probability gauge
+  ─ Individual customer look-up with churn risk-score gauge
   ─ Raw scored data table with search & download
 
 Run:
@@ -122,7 +122,7 @@ seg_options  = ["All"] + SEG_ORDER
 sel_geo  = st.sidebar.selectbox("Geography",     geo_options)
 sel_seg  = st.sidebar.selectbox("Risk Segment",  seg_options)
 prob_min, prob_max = st.sidebar.slider(
-    "Churn Probability Range", 0.0, 1.0, (0.0, 1.0), 0.01
+    "Churn Risk Score Range", 0.0, 1.0, (0.0, 1.0), 0.01
 )
 
 st.sidebar.markdown("---")
@@ -177,12 +177,14 @@ a = biz["assumptions"]
 b1, b2, b3, b4 = st.columns(4)
 b1.metric("Churners in top 10% of scores", f"{biz['top10_capture']:.0%}",
           delta=f"{biz['lift_top10']:.1f}x better than random")
-b2.metric("Profit-optimal threshold", f"{biz['optimal_threshold']:.2f}")
+b2.metric("Contact threshold", f"{biz['optimal_threshold']:.2f}")
 b3.metric("Customers to contact", f"{biz['customers_contacted']:,}",
           delta=f"reaches {biz['churners_reached']} churners", delta_color="off")
 b4.metric("Campaign net value", f"₹{biz['net_value_optimal_inr']/1e5:.2f} L",
           delta=f"vs ₹{biz['net_value_contact_all_inr']/1e5:.2f} L contacting everyone",
           delta_color="off")
+st.caption("Risk scores rank customers; they are not calibrated probabilities (class weighting pushes them up). "
+           "The contact threshold was chosen on training data and is reported here on the test set.")
 st.caption(f"Assumptions (editable in churn_model.py): contacting a customer costs ₹{a['contact_cost_inr']:,}, "
            f"a retained churner is worth ₹{a['customer_value_inr']:,}, and the offer retains "
            f"{a['save_rate']:.0%} of the churners it reaches.")
@@ -251,8 +253,8 @@ with col_d:
         color_discrete_map=SEG_COLORS,
         category_orders={"risk_segment": SEG_ORDER},
         opacity=0.65,
-        title="Age vs Churn Probability",
-        labels={"age": "Age", "churn_prob": f"Churn Probability ({BEST})"},
+        title="Age vs Churn Risk Score",
+        labels={"age": "Age", "churn_prob": f"Churn risk score ({BEST})"},
     )
     fig_scatter.update_layout(**PLOTLY_LAYOUT)
     st.plotly_chart(fig_scatter, width="stretch")
@@ -264,14 +266,14 @@ with col_e:
     fig_prod = px.bar(
         prod, x="num_products", y="churn_prob", color="member", barmode="group",
         color_discrete_map={"Inactive": RED, "Active": GREEN},
-        title="Avg Predicted Churn by Products Held and Activity (%)",
-        labels={"num_products": "Number of products", "churn_prob": "Avg P(churn) %", "member": ""},
+        title="Avg Risk Score by Products Held and Activity",
+        labels={"num_products": "Number of products", "churn_prob": "Avg risk score (x100)", "member": ""},
     )
     fig_prod.update_layout(**PLOTLY_LAYOUT)
     st.plotly_chart(fig_prod, width="stretch")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ROW 3 — Feature importance + probability histogram
+# ROW 3 — Feature importance + risk-score histogram
 # ═══════════════════════════════════════════════════════════════════════════════
 col_f, col_g = st.columns(2)
 
@@ -290,8 +292,8 @@ with col_g:
     fig_hist = px.histogram(
         df, x="churn_prob", nbins=40,
         color_discrete_sequence=[BLUE],
-        title="Churn Probability Distribution",
-        labels={"churn_prob": f"P(Churn) — {BEST}"},
+        title="Churn Risk Score Distribution",
+        labels={"churn_prob": f"Risk score — {BEST}"},
     )
     fig_hist.add_vline(x=biz["optimal_threshold"], line_dash="dash", line_color=RED,
                        annotation_text=f"Contact threshold ({biz['optimal_threshold']:.2f})",
@@ -307,7 +309,11 @@ st.markdown('<div class="section-title">🔍 Individual Customer Risk Look-up</d
             unsafe_allow_html=True)
 
 ranked   = df.sort_values("churn_prob", ascending=False).reset_index(drop=True)
-cust_idx = st.slider("Customer rank (1 = highest risk in current filter)", 1, len(ranked), 1) - 1
+if len(ranked) > 1:
+    cust_idx = st.slider("Customer rank (1 = highest risk in current filter)", 1, len(ranked), 1) - 1
+else:
+    cust_idx = 0
+    st.caption("Only one customer matches the current filters.")
 row      = ranked.iloc[cust_idx]
 prob     = row["churn_prob"]
 prob_lr  = row["churn_prob_lr"]
@@ -328,10 +334,10 @@ with c1:
       <table style="width:100%;font-size:14px;color:#CBD5E1;">
         <tr><td style="padding:6px 0;color:#64748B;">Risk Segment</td>
             <td>{seg_badge}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748B;">{BEST} Churn Probability</td>
+        <tr><td style="padding:6px 0;color:#64748B;">{BEST} Risk Score</td>
             <td style="color:{RED if prob>0.6 else AMBER if prob>0.3 else GREEN};font-weight:700;">
               {prob:.2%}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748B;">{BASE} Churn Probability</td>
+        <tr><td style="padding:6px 0;color:#64748B;">{BASE} Risk Score</td>
             <td>{prob_lr:.2%}</td></tr>
         <tr><td style="padding:6px 0;color:#64748B;">Age / Gender / Country</td>
             <td>{int(row['age'])} / {row['gender']} / {row['geography']}</td></tr>

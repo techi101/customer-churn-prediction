@@ -26,7 +26,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
 
-from sklearn.model_selection  import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.model_selection  import train_test_split, StratifiedKFold, cross_val_score, cross_val_predict
+from sklearn.base             import clone
 from sklearn.preprocessing    import StandardScaler, OneHotEncoder
 from sklearn.linear_model     import LogisticRegression
 from sklearn.ensemble         import RandomForestClassifier
@@ -271,20 +272,27 @@ top10_capture = capture_at(best_prob, 0.10)
 top20_capture = capture_at(best_prob, 0.20)
 lift_top10    = top10_capture / 0.10
 
-def net_value(prob, t):
+def net_value(prob, t, y):
     contact = prob >= t
-    tp = (contact & (y_true == 1)).sum()
+    tp = (contact & (y == 1)).sum()
     return tp * SAVE_RATE * CUSTOMER_VALUE - contact.sum() * CONTACT_COST, int(contact.sum()), int(tp)
 
+# The threshold is chosen on out-of-fold predictions for the TRAINING set, so the
+# test set is only used to report the result, never to pick it.
+oof_prob = cross_val_predict(clone(models[BEST]), X_train, y_train, cv=cv,
+                             method="predict_proba", n_jobs=-1)[:, 1]
 thresholds = np.round(np.arange(0.05, 0.96, 0.01), 2)
-curve = [(t, *net_value(best_prob, t)) for t in thresholds]
-best_t, best_net, best_n, best_tp = max(curve, key=lambda r: r[1])
-net_at_05, n_at_05, _ = net_value(best_prob, 0.5)
+train_curve = [(t, *net_value(oof_prob, t, y_train.values)) for t in thresholds]
+best_t = max(train_curve, key=lambda r: r[1])[0]
+
+curve = [(t, *net_value(best_prob, t, y_true)) for t in thresholds]   # test set, for reporting
+best_net, best_n, best_tp = net_value(best_prob, best_t, y_true)
+net_at_05, n_at_05, _ = net_value(best_prob, 0.5, y_true)
 contact_all_net = y_true.sum() * SAVE_RATE * CUSTOMER_VALUE - len(y_true) * CONTACT_COST
 
 print(f"   Top-10% riskiest customers contain {top10_capture:.1%} of churners "
       f"(lift {lift_top10:.1f}x vs random)")
-print(f"   Profit-optimal threshold: {best_t:.2f} -> contact {best_n} customers, "
+print(f"   Profit-optimal threshold (chosen on training folds): {best_t:.2f} -> test set: contact {best_n} customers, "
       f"net value INR {best_net:,.0f} (vs INR {net_at_05:,.0f} at 0.50, "
       f"INR {contact_all_net:,.0f} if everyone is contacted)")
 
@@ -322,11 +330,11 @@ axes[1].set_yticklabels(["Retained","Churned"], color=TEXT_CLR, rotation=0)
 
 axes[2].plot([c[0] for c in curve], [c[1]/1e5 for c in curve], color="#2A9D8F", linewidth=2.5)
 axes[2].axvline(best_t, color="#E63946", linestyle="--", linewidth=1.5,
-                label=f"optimal t={best_t:.2f}")
+                label=f"chosen on train t={best_t:.2f}")
 axes[2].axvline(0.5, color="#475569", linestyle=":", linewidth=1.5, label="default t=0.50")
 axes[2].legend(facecolor=GRID_CLR, labelcolor=TEXT_CLR, fontsize=9)
-style_axes(axes[2], "Retention Campaign Net Value vs Threshold",
-           "Churn-probability threshold", "Net value (INR lakh)")
+style_axes(axes[2], "Retention Campaign Net Value vs Threshold (test set)",
+           "Churn risk-score threshold", "Net value (INR lakh)")
 
 plt.tight_layout()
 plt.savefig(f"{REPORTS_DIR}/model_evaluation.png", dpi=150,
@@ -394,9 +402,11 @@ metrics = {
         "top20_capture": round(float(top20_capture), 4),
         "lift_top10": round(float(lift_top10), 2),
         "optimal_threshold": float(best_t),
+        "threshold_chosen_on": "out-of-fold predictions on the training set",
+        "mean_risk_score_test": round(float(best_prob.mean()), 4),
         "customers_contacted": best_n,
         "churners_reached": best_tp,
-        "net_value_optimal_inr": float(best_net),
+        "net_value_optimal_inr": round(float(best_net)),
         "net_value_at_0_5_inr": float(net_at_05),
         "net_value_contact_all_inr": float(contact_all_net),
     },

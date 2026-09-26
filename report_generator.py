@@ -8,7 +8,7 @@ around them is a fixed template. Nothing is hard-coded or invented.
 
 This module reads:
   - data/Churn_Modelling.csv      (full portfolio, for segment churn rates)
-  - data/scored_customers.csv     (held-out test set with churn probabilities)
+  - data/scored_customers.csv     (held-out test set with churn risk scores)
   - reports/metrics.json          (model scores and campaign economics)
 
 And produces:
@@ -133,7 +133,8 @@ def build_markdown(ins):
     lines += [
         "",
         "## 4. Recommended campaign",
-        f"- Contact customers with predicted churn probability ≥ **{biz['optimal_threshold']:.2f}**: "
+        f"- Contact customers with a churn risk score ≥ **{biz['optimal_threshold']:.2f}** (threshold chosen on "
+        f"training data, results below are on the test set): "
         f"{biz['customers_contacted']:,} of 2,000 test customers, reaching {biz['churners_reached']} "
         f"actual churners.",
         f"- Prioritise **inactive members aged 50+** ({ins['old_inactive']['mean']:.0%} churn, "
@@ -149,6 +150,9 @@ def build_markdown(ins):
         f"- Campaign economics assume ₹{a['contact_cost_inr']:,} per contact, ₹{a['customer_value_inr']:,} "
         f"per retained churner and a {a['save_rate']:.0%} save rate. These are placeholders, not "
         "figures from the data; change them in `churn_model.py`.",
+        f"- Risk scores rank customers well but are not calibrated probabilities: class weighting lifts the "
+        f"average test score to {biz['mean_risk_score_test']:.2f} against an actual churn rate of "
+        f"{ins['seg_actual']['mean'].mul(ins['seg_actual']['count']).sum() / ins['seg_actual']['count'].sum():.2f}.",
         "- The dataset is a single snapshot, so the model predicts who churned, not when. A production "
         "model would need monthly behavioural history.",
         "- Gender and age are legally sensitive in credit and marketing decisions; they are used here "
