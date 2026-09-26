@@ -1,67 +1,40 @@
-# CUSTOMER CHURN PREDICTION — EXECUTIVE BRIEFING
-Date: July 18, 2026  |  Prepared by: Automated Analytics Engine
----
+# Customer Churn — Executive Briefing
+*Generated 26 Sep 2026 from 10,000 real bank customers (public Bank Customer Churn dataset).*
 
-## 1. EXECUTIVE SUMMARY
-Our machine-learning pipeline analysed **2,100** banking customers and identified **154** who churned, representing a portfolio churn rate of **7.3%**. The predictive models achieved a **Random Forest AUC of 0.87** and a Logistic Regression AUC of 0.83, significantly outperforming a random baseline (0.50).
+## 1. Headline
+- **20.4%** of customers churned.
+- A LightGBM model ranks customers by churn risk with a test AUC of **0.864** (5-fold CV 0.863 ± 0.011), versus 0.785 for a Logistic Regression baseline.
+- Contacting only the riskiest **10%** of customers reaches **41%** of all churners — **4.1x** better than picking customers at random.
+- Under the stated campaign assumptions, targeting by model score is worth **₹6.31 lakh** per 2,000 customers, versus ₹2.21 lakh for contacting everyone.
 
-Portfolio revenue at risk — estimated from average customer balance (₹82,012) — is approximately **₹12,629,776**. Targeted retention interventions across high- and medium-risk segments represent the primary opportunity to protect this value.
+## 2. Who churns
+| Segment | Churn rate | Compared with |
+|---|---|---|
+| Age 50+ | 45.4% | 16.3% for under 50 (2.8x) |
+| Customers in Germany | 32.4% | 16.3% for other countries (2.0x) |
+| Inactive members | 26.9% | 14.3% for active members (1.9x) |
+| Female customers | 25.1% | 16.5% for male customers (1.5x) |
 
-## 2. RISK SEGMENTATION
-The portfolio was segmented into three tiers based on predicted churn probability:
+**Products held is the sharpest signal:** 1 product → 28% churn (n=5,084), 2 products → 8% churn (n=4,590), 3 products → 83% churn (n=266), 4 products → 100% churn (n=60). Customers with 3–4 products are a small group but churn at very high rates, which suggests they were cross-sold products they did not want.
 
-  🔴  High Risk   —   190 customers  (avg. P(churn) = 71.5%)
-  🟡  Medium Risk —   527 customers  (avg. P(churn) = 41.9%)
-  🟢  Low Risk    — 1,383 customers
+The model's most important features are `age`, `num_products`, `balance`, `credit_score`, `balance_to_salary`.
 
-The **High Risk cohort** demands immediate attention from relationship managers. An average churn probability of 71.5% in this group indicates systemic disengagement that warrants proactive outreach campaigns.
+## 3. Does the risk score hold up?
+Actual churn in the held-out test set, by predicted risk segment:
 
-## 3. KEY DRIVERS OF CHURN
-Random Forest feature importance analysis and behavioural signal comparison reveal the following primary churn drivers among lost customers:
+| Predicted segment | Customers | Actual churn |
+|---|---|---|
+| High Risk | 462 | 60.0% |
+| Medium Risk | 459 | 16.1% |
+| Low Risk | 1,079 | 5.2% |
 
-  1. **Spend Trend**: -0.0594 (vs. positive for retained customers)
-     ↳ Declining spend velocity is the strongest early warning signal of disengagement. Customers who reduce transaction volumes over consecutive months are 3–4× more likely to close accounts within the next quarter.
+## 4. Recommended campaign
+- Contact customers with predicted churn probability ≥ **0.45**: 646 of 2,000 test customers, reaching 318 actual churners.
+- Prioritise **inactive members aged 50+** (82% churn, n=484) and **customers with 3+ products** (86% churn, n=326) for relationship-manager calls.
+- Investigate the **Germany** portfolio, which churns at 32.4% against 20.4% overall.
+- Run the campaign as an A/B test (hold out a random control group) so the true save rate can be measured and fed back into the threshold.
 
-  2. **Complaint Frequency**: 1.83 complaints/year
-     ↳ Churned customers lodge nearly twice as many complaints as retained peers. Unresolved service failures are a direct churn catalyst and require same-day resolution SLAs for high-value accounts.
-
-  3. **Reward Redemption Rate**: 39.3% average redemption
-     ↳ Low reward engagement signals reduced product affinity. Loyalty programmes are a proven retention lever — low redeemers should be targeted with personalised reward activation nudges.
-
-  4. **Inactive Months**: 3.0 consecutive inactive months
-     ↳ Extended inactivity windows are strongly correlated with imminent churn. Automated re-engagement triggers should fire after 2+ consecutive inactive months.
-
-
-## 4. GEOGRAPHIC ANALYSIS
-Churn incidence is highest in **Germany** (9.2% churn rate), which may reflect competitive market pressure or product-market fit gaps in that region. A geo-specific retention strategy — including localised product bundles, preferential rate offers, and dedicated relationship managers — is recommended.
-
-## 5. STRATEGIC RECOMMENDATIONS
-
-  1. **Predictive Outreach Programme**
-     Deploy churn-score-based outreach for all 190 high-risk customers. Prioritise accounts with P(churn) > 0.70 for personal relationship manager contact within 48 hours.
-
-  2. **Complaint Resolution SLA**
-     Implement a Tier-1 complaint escalation protocol with same-day resolution guarantees for customers with complaint_frequency > 2. Track Net Promoter Score (NPS) uplift as the primary KPI.
-
-  3. **Reward Re-engagement Campaign**
-     Launch a targeted reward activation campaign for customers with redemption rates below 39%. A/B test bonus-point incentives vs. cashback offers to identify the optimal retention mechanism.
-
-  4. **Inactivity Trigger Automation**
-     Configure CRM automation rules to flag customers with ≥2 consecutive inactive months and trigger personalised re-engagement emails/SMS with product usage reminders.
-
-  5. **Geographic Retention Task Force**
-     Establish a dedicated retention task force for the Germany market, focusing on competitive benchmarking and localised product enhancements.
-
-## 6. MODEL PERFORMANCE SUMMARY
-| Model                | AUC Score | CV AUC (5-Fold)     |
-  |----------------------|-----------|---------------------|
-  | Random Forest        | 0.87      | 0.87 ± 0.01         |
-  | Logistic Regression  | 0.83      | 0.83 ± 0.01         |
-
-  The Random Forest model is recommended for production deployment owing to its superior AUC and robustness to non-linear interactions between behavioural features. Logistic Regression serves as a transparent, interpretable baseline ideal for regulatory reporting.
-
----
-  This report was generated automatically by the Churn Analytics Engine.
-  All figures are derived from synthetic data for portfolio demonstration purposes.
-  Generated: July 18, 2026
----
+## 5. Assumptions and limits
+- Campaign economics assume ₹500 per contact, ₹10,000 per retained churner and a 30% save rate. These are placeholders, not figures from the data; change them in `churn_model.py`.
+- The dataset is a single snapshot, so the model predicts who churned, not when. A production model would need monthly behavioural history.
+- Gender and age are legally sensitive in credit and marketing decisions; they are used here for analysis, and a deployed model would need a fairness review.

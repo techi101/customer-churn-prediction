@@ -1,0 +1,112 @@
+{
+  "dataset": {
+    "name": "Bank Customer Churn (Churn_Modelling.csv)",
+    "rows": 10000,
+    "churn_rate": 0.2037,
+    "test_rows": 2000
+  },
+  "models": {
+    "Logistic Regression": {
+      "test_auc": 0.7847,
+      "pr_auc": 0.5012,
+      "cv_auc_mean": 0.7822,
+      "cv_auc_std": 0.0159
+    },
+    "Random Forest": {
+      "test_auc": 0.8644,
+      "pr_auc": 0.7029,
+      "cv_auc_mean": 0.8594,
+      "cv_auc_std": 0.0099
+    },
+    "LightGBM": {
+      "test_auc": 0.8642,
+      "pr_auc": 0.7159,
+      "cv_auc_mean": 0.8631,
+      "cv_auc_std": 0.0105
+    }
+  },
+  "best_model": "LightGBM",
+  "baseline_model": "Logistic Regression",
+  "business": {
+    "assumptions": {
+      "contact_cost_inr": 500,
+      "customer_value_inr": 10000,
+      "save_rate": 0.3
+    },
+    "top10_capture": 0.4128,
+    "top20_capture": 0.629,
+    "lift_top10": 4.13,
+    "optimal_threshold": 0.45,
+    "customers_contacted": 646,
+    "churners_reached": 318,
+    "net_value_optimal_inr": 630999.9999999999,
+    "net_value_at_0_5_inr": 626000.0,
+    "net_value_contact_all_inr": 221000.0
+  },
+  "feature_importance": [
+    {
+      "feature": "age",
+      "importance": 0.2917
+    },
+    {
+      "feature": "num_products",
+      "importance": 0.2009
+    },
+    {
+      "feature": "balance",
+      "importance": 0.1037
+    },
+    {
+      "feature": "credit_score",
+      "importance": 0.0727
+    },
+    {
+      "feature": "balance_to_salary",
+      "importance": 0.071
+    },
+    {
+      "feature": "estimated_salary",
+      "importance": 0.0707
+    },
+    {
+      "feature": "is_active_member",
+      "importance": 0.0539
+    },
+    {
+      "feature": "geography_Germany",
+      "importance": 0.0386
+    },
+    {
+      "feature": "products_per_tenure",
+      "importance": 0.0256
+    },
+    {
+      "feature": "gender_Male",
+      "importance": 0.0214
+    },
+    {
+      "feature": "tenure_years",
+      "importance": 0.018
+    },
+    {
+      "feature": "senior",
+      "importance": 0.0129
+    },
+    {
+      "feature": "geography_Spain",
+      "importance": 0.0079
+    },
+    {
+      "feature": "zero_balance",
+      "importance": 0.0051
+    },
+    {
+      "feature": "has_credit_card",
+      "importance": 0.0032
+    },
+    {
+      "feature": "inactive_multi_prod",
+      "importance": 0.0027
+    }
+  ]
+}

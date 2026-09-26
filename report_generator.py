@@ -1,26 +1,30 @@
 """
 report_generator.py
 --------------------
-Generates an executive-level narrative report from model outputs —
-demonstrating the "GenAI-assisted analytics" angle.
+Turns model outputs into an executive briefing a retention manager can act on.
+
+Every number in the report is computed from the pipeline outputs; the prose
+around them is a fixed template. Nothing is hard-coded or invented.
 
 This module reads:
-  - data/scored_customers.csv
-  - data/banking_customers.csv
-  - reports/classification_reports.txt
+  - data/Churn_Modelling.csv      (full portfolio, for segment churn rates)
+  - data/scored_customers.csv     (held-out test set with churn probabilities)
+  - reports/metrics.json          (model scores and campaign economics)
 
 And produces:
-  - reports/executive_report.txt   — plain text briefing
-  - reports/executive_report.md    — markdown (render on GitHub)
+  - reports/executive_report.md   — markdown (renders on GitHub)
+  - reports/executive_report.txt  — plain-text version
 
 Run:
     python report_generator.py
 """
 
-import pandas as pd
-import numpy as np
+import json
 import os
+import re
 from datetime import datetime
+
+import pandas as pd
 
 REPORTS_DIR = "reports"
 os.makedirs(REPORTS_DIR, exist_ok=True)
@@ -28,236 +32,149 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 
 # ── Load data ───────────────────────────────────────────────────────────────────
 def load_data():
+    full = pd.read_csv("data/Churn_Modelling.csv").rename(columns={
+        "Geography": "geography", "Gender": "gender", "Age": "age",
+        "NumOfProducts": "num_products", "IsActiveMember": "is_active_member",
+        "Balance": "balance", "Exited": "churn",
+    })
     scored = pd.read_csv("data/scored_customers.csv")
-    full   = pd.read_csv("data/banking_customers.csv")
-    return scored, full
+    with open(f"{REPORTS_DIR}/metrics.json") as f:
+        metrics = json.load(f)
+    return full, scored, metrics
+
+
+def rate(d, mask):
+    return d.loc[mask, "churn"].mean()
 
 
 # ── Analytics engine ────────────────────────────────────────────────────────────
-def compute_insights(scored: pd.DataFrame, full: pd.DataFrame) -> dict:
-    """Compute all metrics that feed the narrative."""
-    total          = len(scored)
-    actual_churn   = scored["actual_churn"].sum()
-    churn_rate     = actual_churn / total
+def compute_insights(full, scored, metrics):
+    overall = full["churn"].mean()
+    geo = full.groupby("geography")["churn"].mean().sort_values(ascending=False)
+    prod = full.groupby("num_products")["churn"].agg(["mean", "count"])
+    seg_actual = scored.groupby("risk_segment")["actual_churn"].agg(["mean", "count"])
 
-    high_risk      = (scored["risk_segment"] == "High Risk").sum()
-    med_risk       = (scored["risk_segment"] == "Medium Risk").sum()
-    low_risk       = (scored["risk_segment"] == "Low Risk").sum()
-
-    # Avg probability by segment
-    avg_p_high  = scored[scored["risk_segment"]=="High Risk"]["churn_prob_rf"].mean()
-    avg_p_med   = scored[scored["risk_segment"]=="Medium Risk"]["churn_prob_rf"].mean()
-
-    # Top behavioural drivers (among actual churners)
-    churners = scored[scored["actual_churn"] == 1]
-    avg_spend_churn     = churners["spend_trend"].mean()
-    avg_complaint_churn = churners["complaint_frequency"].mean()
-    avg_reward_churn    = churners["reward_redemption_rate"].mean()
-    avg_inactive_churn  = churners["inactive_months"].mean()
-
-    # Geography
-    geo_churn = full.groupby("geography")["churn"].mean().sort_values(ascending=False)
-    top_geo   = geo_churn.index[0]
-    top_geo_r = geo_churn.iloc[0]
-
-    # Revenue at risk (proxy: mean balance × churn rate)
-    mean_balance   = full["balance"].mean()
-    revenue_at_risk = mean_balance * actual_churn
-
-    # Model performance
-    auc_rf = 0.87   # from pipeline
-    auc_lr = 0.83
+    drivers = [
+        ("Age 50+",                    rate(full, full["age"] >= 50),
+                                       rate(full, full["age"] < 50), "under 50"),
+        ("Inactive members",           rate(full, full["is_active_member"] == 0),
+                                       rate(full, full["is_active_member"] == 1), "active members"),
+        (f"Customers in {geo.index[0]}", geo.iloc[0],
+                                       rate(full, full["geography"] != geo.index[0]), "other countries"),
+        ("Female customers",           rate(full, full["gender"] == "Female"),
+                                       rate(full, full["gender"] == "Male"), "male customers"),
+    ]
+    drivers.sort(key=lambda d: d[1] / d[2], reverse=True)
 
     return {
-        "total":           total,
-        "actual_churn":    actual_churn,
-        "churn_rate":      churn_rate,
-        "high_risk":       high_risk,
-        "med_risk":        med_risk,
-        "low_risk":        low_risk,
-        "avg_p_high":      avg_p_high,
-        "avg_p_med":       avg_p_med,
-        "avg_spend_churn": avg_spend_churn,
-        "avg_complaint":   avg_complaint_churn,
-        "avg_reward":      avg_reward_churn,
-        "avg_inactive":    avg_inactive_churn,
-        "top_geo":         top_geo,
-        "top_geo_rate":    top_geo_r,
-        "revenue_at_risk": revenue_at_risk,
-        "mean_balance":    mean_balance,
-        "auc_rf":          auc_rf,
-        "auc_lr":          auc_lr,
+        "overall": overall,
+        "n": len(full),
+        "geo": geo,
+        "prod": prod,
+        "seg_actual": seg_actual,
+        "drivers": drivers,
+        "m": metrics,
+        "old_inactive": full.loc[(full["age"] >= 50) & (full["is_active_member"] == 0), "churn"].agg(["mean", "count"]),
+        "multi_prod": full.loc[full["num_products"] >= 3, "churn"].agg(["mean", "count"]),
     }
 
 
-# ── Narrative template ──────────────────────────────────────────────────────────
-def build_report(ins: dict, fmt: str = "text") -> str:
-    """
-    Build the full narrative report in either 'text' or 'markdown' format.
-    This mimics what a GenAI layer would produce from structured analytics output.
-    """
+# ── Report builder ──────────────────────────────────────────────────────────────
+def build_markdown(ins):
+    m, biz = ins["m"], ins["m"]["business"]
+    best, base = m["best_model"], m["baseline_model"]
+    bm, lm = m["models"][best], m["models"][base]
+    a = biz["assumptions"]
+    prod = ins["prod"]
+    top_feats = ", ".join(f"`{f['feature']}`" for f in m["feature_importance"][:5])
 
-    date_str = datetime.now().strftime("%B %d, %Y")
-    H1 = ("# " if fmt == "markdown" else "")
-    H2 = ("## " if fmt == "markdown" else "")
-    H3 = ("### " if fmt == "markdown" else "")
-    HR = ("---" if fmt == "markdown" else "─" * 65)
-    BOLD = ("**" if fmt == "markdown" else "")
-    BE   = ("**" if fmt == "markdown" else "")
-
-    lines = []
-    lines.append(f"{H1}CUSTOMER CHURN PREDICTION — EXECUTIVE BRIEFING")
-    lines.append(f"Date: {date_str}  |  Prepared by: Automated Analytics Engine")
-    lines.append(HR)
-
-    # ── Executive Summary ──────────────────────────────────────────────────────
-    lines.append(f"\n{H2}1. EXECUTIVE SUMMARY")
-    lines.append(
-        f"Our machine-learning pipeline analysed {BOLD}{ins['total']:,}{BE} banking customers "
-        f"and identified {BOLD}{ins['actual_churn']:,}{BE} who churned, "
-        f"representing a portfolio churn rate of {BOLD}{ins['churn_rate']*100:.1f}%{BE}. "
-        f"The predictive models achieved a {BOLD}Random Forest AUC of {ins['auc_rf']:.2f}{BE} "
-        f"and a Logistic Regression AUC of {ins['auc_lr']:.2f}, "
-        f"significantly outperforming a random baseline (0.50)."
-    )
-    lines.append(
-        f"\nPortfolio revenue at risk — estimated from average customer balance "
-        f"(₹{ins['mean_balance']:,.0f}) — is approximately {BOLD}₹{ins['revenue_at_risk']:,.0f}{BE}. "
-        f"Targeted retention interventions across high- and medium-risk segments "
-        f"represent the primary opportunity to protect this value."
-    )
-
-    # ── Risk Segmentation ─────────────────────────────────────────────────────
-    lines.append(f"\n{H2}2. RISK SEGMENTATION")
-    lines.append(f"The portfolio was segmented into three tiers based on predicted churn probability:\n")
-    lines.append(f"  {'🔴' if fmt=='markdown' else '[HIGH  ]'}  High Risk   — {ins['high_risk']:>5,} customers  "
-                 f"(avg. P(churn) = {ins['avg_p_high']:.1%})")
-    lines.append(f"  {'🟡' if fmt=='markdown' else '[MEDIUM]'}  Medium Risk — {ins['med_risk']:>5,} customers  "
-                 f"(avg. P(churn) = {ins['avg_p_med']:.1%})")
-    lines.append(f"  {'🟢' if fmt=='markdown' else '[LOW   ]'}  Low Risk    — {ins['low_risk']:>5,} customers")
-    lines.append(
-        f"\nThe {BOLD}High Risk cohort{BE} demands immediate attention from relationship managers. "
-        f"An average churn probability of {ins['avg_p_high']:.1%} in this group "
-        f"indicates systemic disengagement that warrants proactive outreach campaigns."
-    )
-
-    # ── Behavioural Drivers ────────────────────────────────────────────────────
-    lines.append(f"\n{H2}3. KEY DRIVERS OF CHURN")
-    lines.append("Random Forest feature importance analysis and behavioural signal comparison "
-                 "reveal the following primary churn drivers among lost customers:\n")
-
-    drivers = [
-        ("Spend Trend",
-         f"{ins['avg_spend_churn']:+.4f} (vs. positive for retained customers)",
-         "Declining spend velocity is the strongest early warning signal of disengagement. "
-         "Customers who reduce transaction volumes over consecutive months are "
-         "3–4× more likely to close accounts within the next quarter."),
-        ("Complaint Frequency",
-         f"{ins['avg_complaint']:.2f} complaints/year",
-         "Churned customers lodge nearly twice as many complaints as retained peers. "
-         "Unresolved service failures are a direct churn catalyst and require "
-         "same-day resolution SLAs for high-value accounts."),
-        ("Reward Redemption Rate",
-         f"{ins['avg_reward']:.1%} average redemption",
-         "Low reward engagement signals reduced product affinity. Loyalty programmes "
-         "are a proven retention lever — low redeemers should be targeted with "
-         "personalised reward activation nudges."),
-        ("Inactive Months",
-         f"{ins['avg_inactive']:.1f} consecutive inactive months",
-         "Extended inactivity windows are strongly correlated with imminent churn. "
-         "Automated re-engagement triggers should fire after 2+ consecutive inactive months."),
+    lines = [
+        "# Customer Churn — Executive Briefing",
+        f"*Generated {datetime.now():%d %b %Y} from {ins['n']:,} real bank customers "
+        f"(public Bank Customer Churn dataset).*",
+        "",
+        "## 1. Headline",
+        f"- **{ins['overall']:.1%}** of customers churned.",
+        f"- A {best} model ranks customers by churn risk with a test AUC of **{bm['test_auc']:.3f}** "
+        f"(5-fold CV {bm['cv_auc_mean']:.3f} ± {bm['cv_auc_std']:.3f}), versus {lm['test_auc']:.3f} for a "
+        f"{base} baseline.",
+        f"- Contacting only the riskiest **10%** of customers reaches **{biz['top10_capture']:.0%}** of all "
+        f"churners — **{biz['lift_top10']:.1f}x** better than picking customers at random.",
+        f"- Under the stated campaign assumptions, targeting by model score is worth "
+        f"**₹{biz['net_value_optimal_inr']/1e5:.2f} lakh** per 2,000 customers, versus "
+        f"₹{biz['net_value_contact_all_inr']/1e5:.2f} lakh for contacting everyone.",
+        "",
+        "## 2. Who churns",
+        "| Segment | Churn rate | Compared with |",
+        "|---|---|---|",
     ]
-
-    for i, (driver, stat, insight) in enumerate(drivers, 1):
-        lines.append(f"  {i}. {BOLD}{driver}{BE}: {stat}")
-        lines.append(f"     ↳ {insight}\n")
-
-    # ── Geographic Findings ────────────────────────────────────────────────────
-    lines.append(f"\n{H2}4. GEOGRAPHIC ANALYSIS")
-    lines.append(
-        f"Churn incidence is highest in {BOLD}{ins['top_geo']}{BE} "
-        f"({ins['top_geo_rate']*100:.1f}% churn rate), which may reflect competitive "
-        f"market pressure or product-market fit gaps in that region. "
-        f"A geo-specific retention strategy — including localised product bundles, "
-        f"preferential rate offers, and dedicated relationship managers — is recommended."
-    )
-
-    # ── Strategic Recommendations ──────────────────────────────────────────────
-    lines.append(f"\n{H2}5. STRATEGIC RECOMMENDATIONS")
-    recs = [
-        ("Predictive Outreach Programme",
-         f"Deploy churn-score-based outreach for all {ins['high_risk']:,} high-risk customers. "
-         f"Prioritise accounts with P(churn) > 0.70 for personal relationship manager contact "
-         f"within 48 hours."),
-        ("Complaint Resolution SLA",
-         "Implement a Tier-1 complaint escalation protocol with same-day resolution "
-         "guarantees for customers with complaint_frequency > 2. "
-         "Track Net Promoter Score (NPS) uplift as the primary KPI."),
-        ("Reward Re-engagement Campaign",
-         f"Launch a targeted reward activation campaign for customers with redemption rates "
-         f"below {ins['avg_reward']:.0%}. A/B test bonus-point incentives vs. cashback offers "
-         f"to identify the optimal retention mechanism."),
-        ("Inactivity Trigger Automation",
-         "Configure CRM automation rules to flag customers with ≥2 consecutive inactive months "
-         "and trigger personalised re-engagement emails/SMS with product usage reminders."),
-        ("Geographic Retention Task Force",
-         f"Establish a dedicated retention task force for the {ins['top_geo']} market, "
-         f"focusing on competitive benchmarking and localised product enhancements."),
+    for name, r_in, r_out, other in ins["drivers"]:
+        lines.append(f"| {name} | {r_in:.1%} | {r_out:.1%} for {other} ({r_in/r_out:.1f}x) |")
+    lines += [
+        "",
+        "**Products held is the sharpest signal:** "
+        + ", ".join(f"{int(k)} product{'s' if k > 1 else ''} → {v:.0%} churn (n={int(c):,})"
+                    for k, (v, c) in prod.iterrows())
+        + ". Customers with 3–4 products are a small group but churn at very high rates, "
+          "which suggests they were cross-sold products they did not want.",
+        "",
+        f"The model's most important features are {top_feats}.",
+        "",
+        "## 3. Does the risk score hold up?",
+        "Actual churn in the held-out test set, by predicted risk segment:",
+        "",
+        "| Predicted segment | Customers | Actual churn |",
+        "|---|---|---|",
     ]
-
-    for i, (rec, desc) in enumerate(recs, 1):
-        lines.append(f"\n  {i}. {BOLD}{rec}{BE}")
-        lines.append(f"     {desc}")
-
-    # ── Model Performance ──────────────────────────────────────────────────────
-    lines.append(f"\n{H2}6. MODEL PERFORMANCE SUMMARY")
-    lines.append(f"""
-  {'| Model                | AUC Score | CV AUC (5-Fold)     |' if fmt=='markdown' else ''}
-  {'|----------------------|-----------|---------------------|' if fmt=='markdown' else ''}
-  {'| Random Forest        | 0.87      | 0.87 ± 0.01         |' if fmt=='markdown' else 'Random Forest      : Test AUC = 0.87  |  CV AUC = 0.87 ± 0.01'}
-  {'| Logistic Regression  | 0.83      | 0.83 ± 0.01         |' if fmt=='markdown' else 'Logistic Regression: Test AUC = 0.83  |  CV AUC = 0.83 ± 0.01'}
-    """.strip())
-    lines.append(
-        f"\n  The Random Forest model is recommended for production deployment "
-        f"owing to its superior AUC and robustness to non-linear interactions "
-        f"between behavioural features. Logistic Regression serves as a transparent, "
-        f"interpretable baseline ideal for regulatory reporting."
-    )
-
-    # ── Footer ─────────────────────────────────────────────────────────────────
-    lines.append(f"\n{HR}")
-    lines.append("  This report was generated automatically by the Churn Analytics Engine.")
-    lines.append("  All figures are derived from synthetic data for portfolio demonstration purposes.")
-    lines.append(f"  Generated: {date_str}")
-    lines.append(HR + "\n")
-
+    for seg in ["High Risk", "Medium Risk", "Low Risk"]:
+        if seg in ins["seg_actual"].index:
+            v, c = ins["seg_actual"].loc[seg]
+            lines.append(f"| {seg} | {int(c):,} | {v:.1%} |")
+    lines += [
+        "",
+        "## 4. Recommended campaign",
+        f"- Contact customers with predicted churn probability ≥ **{biz['optimal_threshold']:.2f}**: "
+        f"{biz['customers_contacted']:,} of 2,000 test customers, reaching {biz['churners_reached']} "
+        f"actual churners.",
+        f"- Prioritise **inactive members aged 50+** ({ins['old_inactive']['mean']:.0%} churn, "
+        f"n={int(ins['old_inactive']['count']):,}) and **customers with 3+ products** "
+        f"({ins['multi_prod']['mean']:.0%} churn, n={int(ins['multi_prod']['count']):,}) for "
+        "relationship-manager calls.",
+        f"- Investigate the **{ins['geo'].index[0]}** portfolio, which churns at "
+        f"{ins['geo'].iloc[0]:.1%} against {ins['overall']:.1%} overall.",
+        "- Run the campaign as an A/B test (hold out a random control group) so the true save "
+        "rate can be measured and fed back into the threshold.",
+        "",
+        "## 5. Assumptions and limits",
+        f"- Campaign economics assume ₹{a['contact_cost_inr']:,} per contact, ₹{a['customer_value_inr']:,} "
+        f"per retained churner and a {a['save_rate']:.0%} save rate. These are placeholders, not "
+        "figures from the data; change them in `churn_model.py`.",
+        "- The dataset is a single snapshot, so the model predicts who churned, not when. A production "
+        "model would need monthly behavioural history.",
+        "- Gender and age are legally sensitive in credit and marketing decisions; they are used here "
+        "for analysis, and a deployed model would need a fairness review.",
+    ]
     return "\n".join(lines)
+
+
+def to_plain_text(md):
+    txt = re.sub(r"\*\*(.+?)\*\*", r"\1", md)
+    txt = re.sub(r"\*(.+?)\*", r"\1", txt)
+    txt = txt.replace("`", "")
+    txt = re.sub(r"^#+ ", "", txt, flags=re.M)
+    return txt
 
 
 # ── Main ────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    import sys
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    print("[INFO] Loading data and computing insights ...")
-    scored, full = load_data()
-    ins = compute_insights(scored, full)
+    for path in ["data/scored_customers.csv", f"{REPORTS_DIR}/metrics.json"]:
+        if not os.path.exists(path):
+            raise SystemExit("Run `python churn_model.py` first.")
 
-    # Plain text report
-    txt_report = build_report(ins, fmt="text")
-    with open(f"{REPORTS_DIR}/executive_report.txt", "w", encoding="utf-8") as f:
-        f.write(txt_report)
-
-    # Markdown report
-    md_report = build_report(ins, fmt="markdown")
+    md = build_markdown(compute_insights(*load_data()))
     with open(f"{REPORTS_DIR}/executive_report.md", "w", encoding="utf-8") as f:
-        f.write(md_report)
-
-    print(f"[DONE] Reports saved:")
-    print(f"    {REPORTS_DIR}/executive_report.txt")
-    print(f"    {REPORTS_DIR}/executive_report.md\n")
-
-    # Preview first 30 lines
-    preview = txt_report.split("\n")[:30]
-    print("\n".join(preview))
-    print("\n  ... (open reports/executive_report.md for full report)")
+        f.write(md)
+    with open(f"{REPORTS_DIR}/executive_report.txt", "w", encoding="utf-8") as f:
+        f.write(to_plain_text(md))
+    print(md)
+    print(f"\n-> {REPORTS_DIR}/executive_report.md and executive_report.txt")
