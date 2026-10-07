@@ -1,9 +1,26 @@
+# WHAT THIS FILE IS: the shopping list of Python libraries this project needs.
+# Install them all with: pip install -r requirements.txt  (pip = Python's package installer).
+# Analogy: the ingredients list on a recipe; without these, churn_model.py and dashboard.py cannot run.
+# ">=" means "this version or newer". Real example: lightgbm>=4.0 installs LightGBM 4.0 or any later version.
+# Overall flow: pip reads this file -> downloads each library -> then python churn_model.py and streamlit run work.
+#
+# numpy = fast maths on arrays of numbers (sorting risk scores, thresholds 0.05 to 0.95).
 numpy>=1.24
+# pandas = tables (DataFrames): reading Churn_Modelling.csv, churn rate per group, writing scored_customers.csv.
 pandas>=2.0
+# scikit-learn = the ML toolkit: train/test split, 5-fold cross-validation, scaler, one-hot encoder,
+# Logistic Regression, Random Forest, AUC and other metrics. (OneHotEncoder's sparse_output option, used in
+# churn_model.py, exists only in newer versions; 1.3 is the minimum pinned here.)
 scikit-learn>=1.3
+# lightgbm = the gradient-boosting library behind the winning model (test AUC 0.864).
 lightgbm>=4.0
+# matplotlib = draws the PNG charts saved in reports/ (EDA, model evaluation, feature importance).
 matplotlib>=3.7
+# seaborn = plotting on top of matplotlib; used for the confusion-matrix heatmap.
 seaborn>=0.12
+# joblib = saves the trained models to models/*.pkl files.
 joblib>=1.3
+# streamlit = turns dashboard.py into a web page (1.40 is the minimum version pinned here).
 streamlit>=1.40
+# plotly = interactive charts in the dashboard (bars, pie, scatter, histogram, gauge).
 plotly>=5.18

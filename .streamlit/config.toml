@@ -1,7 +1,21 @@
+# WHAT THIS FILE IS: Streamlit's settings file. Streamlit reads .streamlit/config.toml automatically when you run
+# "streamlit run dashboard.py" from the project folder. TOML = a simple "key = value" settings format; [theme] is a section.
+# Analogy: the paint and wallpaper choice for the dashboard; it changes how it looks, not what it computes.
+# Real example: backgroundColor "#0F172A" is the same dark navy as BG in dashboard.py and BG_COLOR in churn_model.py,
+# so the PNG charts in reports/ and the dashboard look like one product.
+# Overall flow: Streamlit starts -> reads this file -> applies the dark theme to every widget and page.
+#
+# [theme] = the colour settings section.
 [theme]
+# Start from Streamlit's built-in dark theme, then override the colours below.
 base="dark"
+# Accent colour for sliders, selected options and buttons (sky blue, same as BLUE in dashboard.py).
 primaryColor="#38BDF8"
+# Main page background (dark navy).
 backgroundColor="#0F172A"
+# Background of the sidebar and input boxes (a slightly lighter slate).
 secondaryBackgroundColor="#1E293B"
+# Default text colour (light grey, easy to read on dark).
 textColor="#E2E8F0"
+# Font family for the app: Streamlit's built-in sans-serif font.
 font="sans serif"
