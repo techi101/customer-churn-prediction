@@ -104,3 +104,26 @@ On Windows, `run_all.bat` does all three.
 ---
 
 **Nitesh** · B.Tech ECE (AI & ML) · NSUT Delhi
+
+## SHAP explanations (`shap_analysis.py`)
+
+Gain importance says which features the trees split on most. SHAP says how much each feature actually pushed each customer's churn score up or down. `shap_analysis.py` reloads `models/lightgbm.pkl`, rebuilds the same test split (seed 42), checks that its scores match the saved pipeline exactly, and runs SHAP's TreeExplainer on the 2,000 test customers.
+
+| Feature | Mean abs SHAP | Gain share |
+|---|---|---|
+| num_products | 0.793 | 0.201 |
+| age | 0.789 | 0.292 |
+| is_active_member | 0.406 | 0.054 |
+| gender_Male | 0.283 | 0.021 |
+| geography_Germany | 0.188 | 0.039 |
+| balance | 0.164 | 0.104 |
+| balance_to_salary | 0.141 | 0.071 |
+| credit_score | 0.125 | 0.073 |
+| estimated_salary | 0.123 | 0.071 |
+
+What changes once you look at SHAP:
+- **Inactivity and gender matter much more than gain suggests.** Being an inactive member raises churn risk strongly (gain share 5%, but third by SHAP). Women in this bank churn more (SHAP push is negative for male).
+- **Germany raises risk** for the same profile, and older customers are pushed up steadily.
+- **Salary and credit score matter less** than gain suggests; trees split on them often but each split moves the score little.
+
+So a retention team should lead with *inactive* members, especially in Germany, rather than with salary bands. Full numbers: `reports/shap_importance.csv`; plot: `reports/shap_summary.png`.
